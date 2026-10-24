@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="lt">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0d0b" />
+    <link rel="icon" href="/assets/card-back-logo.png" />
+    <title>Durak (Durnius) 3D • HUGOLAB Royal Edition</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game-canvas" aria-label="Durak 3D žaidimo stalas"></canvas>
+
+      <!-- HUD Viršuje: Žaidimo būsena, koziris ir valdymas -->
+      <header id="game-header">
+        <div class="header-left">
+          <div class="brand-cluster">
+            <img src="/assets/card-back-logo.png" alt="HUGOLAB Logo" class="brand-avatar" />
+            <div class="brand">
+              <span class="brand-title">HUGOLAB</span>
+              <span class="brand-subtitle">DURAK ROYAL 3D</span>
+            </div>
+          </div>
+          <div class="hud-crest" id="round-badge">Metamas durnius • Raundas 1</div>
+        </div>
+
+        <div class="header-center">
+          <div class="hud-crest trump-crest" id="trump-badge" title="Aktyvus koziris">
+            <span class="trump-card-pill" id="trump-card-text">♥</span>
+            <span class="trump-name" id="trump-name-text">Širdys</span>
+          </div>
+          <div class="hud-crest deck-crest" title="Kaladės ir bitos kortų skaičius">
+            <span class="crest-icon">🎴</span>
+            <span class="crest-label">Kaladė</span>
+            <strong id="deck-counter" class="tabular-num">24</strong>
+            <span class="crest-divider">|</span>
+            <span class="crest-icon">🗄️</span>
+            <span class="crest-label">Bita</span>
+            <strong id="discard-counter" class="tabular-num">0</strong>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <button id="btn-audio" class="btn-icon" title="Garsas (Nutildyti / Įjungti)" aria-label="Garsas"><span id="audio-icon">🔊</span> <span class="btn-text" id="audio-label">Garsas</span></button>
+          <button id="btn-leaderboard" class="btn-icon desktop-only" title="Karališkojo klubo reitingai" aria-label="Reitingai">🏆 <span class="btn-text">Reitingai</span></button>
+          <button id="btn-setup" class="btn-icon btn-gold-outline desktop-only" title="Žaidimo nustatymai (DURAK_CUSTOM_GAME_SETUP)" aria-label="Nustatymai">⚙️ <span class="btn-text">Nustatymai</span></button>
+          <button id="btn-rules" class="btn-icon desktop-only" title="Taisyklės ir Mokytojas" aria-label="Taisyklės">📖 <span class="btn-text">Taisyklės</span></button>
+          <button id="btn-json" class="btn-icon desktop-only" title="Būsenos JSON" aria-label="JSON">📋 <span class="btn-text">JSON</span></button>
+          <button id="btn-restart" class="btn-icon desktop-only" title="Naujas žaidimas" aria-label="Naujas žaidimas">🔄 <span class="btn-text">Naujas</span></button>
+          <button id="btn-mobile-menu" class="btn-icon btn-menu-toggle mobile-only" title="Atidaryti pagrindinį meniu" aria-label="Meniu" aria-expanded="false">☰</button>
+        </div>
+      </header>
+
+      <!-- Teisėjo ir oponentų būsenos juosta -->
+      <section id="referee-bar">
+        <div id="phase-banner" class="phase-banner" aria-live="polite">
+          <span id="phase-badge" class="phase-badge phase-attack">⚔️ JŪSŲ EILĖ</span>
+          <span id="phase-instruction" class="phase-instruction">Pasirinkite kortą atakai</span>
+        </div>
+        <div id="opponent-strip" class="opponent-strip" aria-live="polite"></div>
+        <div id="status-line" class="status-line">Pradedamas žaidimas...</div>
+      </section>
+
+      <!-- Multitarget Defense Selector (kai oponentas puola keliomis kortomis) -->
+      <div id="defense-target-bar" class="defense-target-bar hidden" role="region" aria-label="Pasirinkite ginamą puolimo kortą"></div>
+
+      <!-- Rankos Paginacija (Didelėms rankoms > 7 kortos) -->
+      <div id="hand-pager" class="hand-pager hidden" role="navigation" aria-label="Rankos kortų navigacija">
+        <button id="btn-hand-prev" class="btn-pager" aria-label="Ankstesnės kortos">◀</button>
+        <span id="hand-pager-indicator" class="pager-indicator tabular-num">1-6 / 12</span>
+        <button id="btn-hand-next" class="btn-pager" aria-label="Kitos kortos">▶</button>
+      </div>
+
+      <!-- HUD Apačioje: Žaidėjo veiksmai -->
+      <footer id="action-controls" role="toolbar" aria-label="Žaidėjo veiksmai">
+        <button id="btn-play-card" class="btn-action btn-play hidden" aria-label="Dėti pasirinktą kortą">⚔️ Dėti kortą</button>
+        <button id="btn-pass" class="btn-action btn-bita hidden" aria-label="Bita arba baigti ėjimą">✓ Bita / Baigti</button>
+        <button id="btn-take" class="btn-action btn-take hidden" aria-label="Pasiimti stalo kortas">⬇ Imti kortas</button>
+        <button id="btn-hint" class="btn-action btn-hint" aria-label="Mokytojo patarimas">💡 Mokytojo patarimas</button>
+      </footer>
+      <button id="btn-reopen-gameover" class="floating-pill hidden" aria-label="Rodyti žaidimo pabaigos rezultatus">🏆 Rodyti rezultatus</button>
+
+      <!-- Mobile Navigation Drawer -->
+      <div id="mobile-drawer" class="mobile-drawer-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+        <div class="mobile-drawer-backdrop" id="drawer-backdrop"></div>
+        <div class="mobile-drawer-content">
+          <div class="drawer-header">
+            <div class="drawer-brand">
+              <span class="setup-icon">👑</span>
+              <div>
+                <h3 id="drawer-title">HUGOLAB DURAK</h3>
+                <span class="drawer-subtitle">Karališkasis meniu</span>
+              </div>
+            </div>
+            <button id="drawer-btn-close" class="btn-close" aria-label="Uždaryti meniu">×</button>
+          </div>
+
+          <nav class="drawer-menu-list">
+            <button id="drawer-btn-setup" class="drawer-item">
+              <span class="drawer-item-icon">⚙️</span>
+              <div class="drawer-item-text">
+                <strong>Nustatymai & Taisyklės</strong>
+                <small>Variantai, komandos, kaladės parametrai</small>
+              </div>
+            </button>
+            <button id="drawer-btn-rules" class="drawer-item">
+              <span class="drawer-item-icon">📖</span>
+              <div class="drawer-item-text">
+                <strong>Taisyklės & Mokytojas</strong>
+                <small>Strateginiai patarimai ir žaidimo gidas</small>
+              </div>
+            </button>
+            <button id="drawer-btn-leaderboard" class="drawer-item">
+              <span class="drawer-item-icon">🏆</span>
+              <div class="drawer-item-text">
+                <strong>Lyderių lenta</strong>
+                <small>Karališkojo klubo reitingai ir statistika</small>
+              </div>
+            </button>
+            <button id="drawer-btn-json" class="drawer-item">
+              <span class="drawer-item-icon">📋</span>
+              <div class="drawer-item-text">
+                <strong>Būsenos JSON</strong>
+                <small>Teisėjo būsenos kopijavimas</small>
+              </div>
+            </button>
+            <button id="drawer-btn-restart" class="drawer-item drawer-item-danger">
+              <span class="drawer-item-icon">🔄</span>
+              <div class="drawer-item-text">
+                <strong>Naujas žaidimas</strong>
+                <small>Pradėti naują partiją iš naujo</small>
+              </div>
+            </button>
+          </nav>
+
+          <div class="drawer-section">
+            <label for="drawer-graphics-select" class="drawer-section-title">🎨 Grafikos kokybė:</label>
+            <select id="drawer-graphics-select" class="drawer-select" aria-label="Grafikos kokybės pasirinkimas">
+              <option value="auto">Auto (Adaptyvi)</option>
+              <option value="high">Aukšta (Pilni šešėliai & VFX)</option>
+              <option value="medium">Vidutinė (Balansas)</option>
+              <option value="low">Žema (Maksimalus našumas)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal: Taisyklės ir Mokytojas -->
+      <div id="teacher-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="teacher-modal-title">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 id="teacher-modal-title">📖 Durniaus Taisyklės & Mokytojas</h3>
+            <button id="btn-close-rules" class="btn-close" aria-label="Uždaryti">×</button>
+          </div>
+          <div class="modal-body" id="rules-summary-body"></div>
+        </div>
+      </div>
+
+      <!-- Modal: Žaidimo Konfigūratorius (DURAK_CUSTOM_GAME_SETUP) -->
+      <div id="setup-modal" class="modal-overlay hidden"></div>
+
+      <!-- Modal: Reitingų Lenta (Leaderboard) -->
+      <div id="leaderboard-modal" class="modal-overlay hidden"></div>
+
+      <!-- Modal: Būsenos JSON -->
+      <div id="json-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="json-modal-title">
+        <div class="modal-card">
+          <div class="modal-header">
+            <h3 id="json-modal-title">📋 Žaidimo Būsena (JSON)</h3>
+            <button id="btn-close-json" class="btn-close" aria-label="Uždaryti">×</button>
+          </div>
+          <div class="modal-body">
+            <pre id="json-content">{}</pre>
+          </div>
+          <div class="modal-footer">
+            <button id="btn-copy-json" class="btn-action">Kopijuoti JSON</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal: Žaidimo Pabaiga (Game Over / Pergalė / Durnius) -->
+      <div id="gameover-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
+        <div class="modal-card modal-gameover">
+          <div class="gameover-header">
+            <div id="gameover-emblem" class="gameover-emblem">👑</div>
+            <h2 id="gameover-title">PERGALĖ!</h2>
+            <p id="gameover-subtitle">Jūs meistriškai išėjote iš žaidimo!</p>
+          </div>
+          <div class="gameover-stats">
+            <div class="stat-box">
+              <span class="stat-label">Durnius</span>
+              <strong id="stat-loser" class="stat-value">AI Jonas</strong>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Raundai</span>
+              <strong id="stat-rounds" class="stat-value tabular-num">4</strong>
+            </div>
+            <div class="stat-box">
+              <span class="stat-label">Bitoje</span>
+              <strong id="stat-discard" class="stat-value tabular-num">28</strong>
+            </div>
+          </div>
+          <div class="gameover-actions">
+            <button id="btn-gameover-restart" class="btn-action btn-gold">🔄 Žaisti dar kartą</button>
+            <button id="btn-gameover-inspect" class="btn-action btn-secondary">👁️ Apžiūrėti stalą</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
