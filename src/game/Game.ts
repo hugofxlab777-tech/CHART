@@ -586,8 +586,18 @@ export class Game {
     const human = this.me();
     const totalCards = human.hand.length;
 
+    // Didelės rankos kortos, stovinčios stačiai atgręžtos į žaidėją, be persidengimo
+    const handScale = isMobilePortrait ? 1.55 : isShortLandscape ? 1.3 : 1.4;
+    const handCardWidth = CardFactory.CARD_WIDTH * handScale;
+    const handGap = 0.1;
+    const spacing = handCardWidth + handGap;
+
+    // Kiek kortų telpa be persidengimo: (N-1)*spacing + plotis <= maxHandWidth
+    const maxHandWidth = isMobilePortrait ? 9.2 : isShortLandscape ? 11.5 : 12.6;
+    const maxFit = Math.max(3, Math.floor((maxHandWidth - handCardWidth) / spacing) + 1);
+
     // Dynamic hand page sizing
-    this.handPageSize = isMobilePortrait ? 6 : isShortLandscape ? 8 : 10;
+    this.handPageSize = Math.min(isMobilePortrait ? 6 : isShortLandscape ? 8 : 10, maxFit);
     if (this.handStartIndex >= totalCards) {
       this.handStartIndex = Math.max(0, totalCards - this.handPageSize);
     }
@@ -598,11 +608,9 @@ export class Game {
         : human.hand.slice(this.handStartIndex, this.handStartIndex + this.handPageSize);
 
     const visibleCount = visibleSlice.length;
-    const maxHandWidth = isMobilePortrait ? 6.8 : isShortLandscape ? 8.4 : 9.4;
-    const spacing = Math.min(1.5, maxHandWidth / Math.max(visibleCount, 1));
-    // Didelės, gerai matomos rankos kortos: telefonas didžiausias mastelis
-    const handScale = isMobilePortrait ? 1.55 : isShortLandscape ? 1.3 : 1.4;
     const startX = -((visibleCount - 1) * spacing) / 2;
+    // Pasukimas į kamerą: kortos veidas atgręžtas žaidėjui, ne į stalą
+    const handRotX = isMobilePortrait ? 0.5 : isShortLandscape ? 0.55 : 0.58;
 
     human.hand.forEach((card, overallIdx) => {
       const mesh = this.cardMeshes.get(card.id);
@@ -617,12 +625,12 @@ export class Game {
         const liftY = isSelected ? 0.7 : 0;
         const forwardZ = isSelected ? -0.3 : 0;
         const baseZ = isMobilePortrait ? 4.9 : isShortLandscape ? 3.6 : 4.2;
-        const posZ = baseZ + Math.abs(posX) * 0.04 + forwardZ;
-        const arcY = (isMobilePortrait ? 1.05 : 0.92) - Math.abs(posX) * 0.035 + liftY;
-        const rotZ = -posX * 0.045;
+        const posZ = baseZ + forwardZ;
+        const arcY = (isMobilePortrait ? 0.95 : 0.9) - Math.abs(posX) * 0.012 + liftY;
+        const rotZ = -posX * 0.02;
 
         const targetPos = new THREE.Vector3(posX, arcY, posZ);
-        const targetRot = new THREE.Euler(isMobilePortrait ? -0.45 : -0.38, 0, rotZ);
+        const targetRot = new THREE.Euler(handRotX, 0, rotZ);
 
         this.setCardOutlineVisible(mesh, isSelected);
 
@@ -639,7 +647,7 @@ export class Game {
         const tuckedX = isLeft ? -3.8 : 3.8;
         const tuckedZ = 5.2;
         const tuckedPos = new THREE.Vector3(tuckedX, 0.2, tuckedZ);
-        const tuckedRot = new THREE.Euler(-0.4, 0, isLeft ? -0.4 : 0.4);
+        const tuckedRot = new THREE.Euler(handRotX, 0, isLeft ? -0.4 : 0.4);
         this.setCardOutlineVisible(mesh, false);
 
         if (instant) {
