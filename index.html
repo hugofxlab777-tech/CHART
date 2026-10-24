@@ -6,7 +6,6 @@
     <meta name="theme-color" content="#0a0d0b" />
     <link rel="icon" href="/assets/card-back-logo.png" />
     <title>Durak (Durnius) 3D • HUGOLAB Royal Edition</title>
-    <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <main id="app">
@@ -63,23 +62,26 @@
         <div id="status-line" class="status-line">Pradedamas žaidimas...</div>
       </section>
 
-      <!-- Multitarget Defense Selector (kai oponentas puola keliomis kortomis) -->
-      <div id="defense-target-bar" class="defense-target-bar hidden" role="region" aria-label="Pasirinkite ginamą puolimo kortą"></div>
+      <!-- Apatinė HUD zona: gynybos tikslo juosta, rankos navigacija ir veiksmų mygtukai -->
+      <div id="bottom-zone">
+        <!-- Multitarget Defense Selector (kai oponentas puola keliomis kortomis) -->
+        <div id="defense-target-bar" class="defense-target-bar hidden" role="region" aria-label="Pasirinkite ginamą puolimo kortą"></div>
 
-      <!-- Rankos Paginacija (Didelėms rankoms > 7 kortos) -->
-      <div id="hand-pager" class="hand-pager hidden" role="navigation" aria-label="Rankos kortų navigacija">
-        <button id="btn-hand-prev" class="btn-pager" aria-label="Ankstesnės kortos">◀</button>
-        <span id="hand-pager-indicator" class="pager-indicator tabular-num">1-6 / 12</span>
-        <button id="btn-hand-next" class="btn-pager" aria-label="Kitos kortos">▶</button>
+        <!-- Rankos Paginacija (Didelėms rankoms > 7 kortos) -->
+        <div id="hand-pager" class="hand-pager hidden" role="navigation" aria-label="Rankos kortų navigacija">
+          <button id="btn-hand-prev" class="btn-pager" aria-label="Ankstesnės kortos">◀</button>
+          <span id="hand-pager-indicator" class="pager-indicator tabular-num">1-6 / 12</span>
+          <button id="btn-hand-next" class="btn-pager" aria-label="Kitos kortos">▶</button>
+        </div>
+
+        <!-- HUD Apačioje: Žaidėjo veiksmai -->
+        <footer id="action-controls" role="toolbar" aria-label="Žaidėjo veiksmai">
+          <button id="btn-play-card" class="btn-action btn-play hidden" aria-label="Dėti pasirinktą kortą">⚔️ Dėti kortą</button>
+          <button id="btn-pass" class="btn-action btn-bita hidden" aria-label="Bita arba baigti ėjimą"><span class="label-full">✓ Bita / Baigti</span><span class="label-short">✓ Bita</span></button>
+          <button id="btn-take" class="btn-action btn-take hidden" aria-label="Pasiimti stalo kortas"><span class="label-full">⬇ Imti kortas</span><span class="label-short">⬇ Imti</span></button>
+          <button id="btn-hint" class="btn-action btn-hint" aria-label="Mokytojo patarimas"><span class="label-full">💡 Mokytojo patarimas</span><span class="label-short">💡 Patarimas</span></button>
+        </footer>
       </div>
-
-      <!-- HUD Apačioje: Žaidėjo veiksmai -->
-      <footer id="action-controls" role="toolbar" aria-label="Žaidėjo veiksmai">
-        <button id="btn-play-card" class="btn-action btn-play hidden" aria-label="Dėti pasirinktą kortą">⚔️ Dėti kortą</button>
-        <button id="btn-pass" class="btn-action btn-bita hidden" aria-label="Bita arba baigti ėjimą">✓ Bita / Baigti</button>
-        <button id="btn-take" class="btn-action btn-take hidden" aria-label="Pasiimti stalo kortas">⬇ Imti kortas</button>
-        <button id="btn-hint" class="btn-action btn-hint" aria-label="Mokytojo patarimas">💡 Mokytojo patarimas</button>
-      </footer>
       <button id="btn-reopen-gameover" class="floating-pill hidden" aria-label="Rodyti žaidimo pabaigos rezultatus">🏆 Rodyti rezultatus</button>
 
       <!-- Mobile Navigation Drawer -->

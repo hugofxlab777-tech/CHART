@@ -161,6 +161,18 @@ export class Hud {
       }
     });
 
+    // ESC uždaro mobilųjį meniu (kai atviras modalas — ModalManager apdoroja pirmiau)
+    document.addEventListener('keydown', (e) => {
+      if (
+        e.key === 'Escape' &&
+        this.mobileDrawer &&
+        !this.mobileDrawer.classList.contains('hidden') &&
+        !document.body.classList.contains('modal-open')
+      ) {
+        this.closeMobileDrawer();
+      }
+    });
+
     document.getElementById('drawer-btn-setup')?.addEventListener('click', () => {
       this.closeMobileDrawer();
       this.onOpenSetupCallback?.();
@@ -317,9 +329,9 @@ export class Hud {
     const suitSymbol = SUIT_SYMBOLS[card.suit] || '';
     let label = `⚔️ Dėti ${rank}${suitSymbol}`;
     if (legalMoveType === 'beat') {
-      label = `🛡️ Atmušti su ${rank}${suitSymbol}`;
+      label = `🛡️ Atmušti ${rank}${suitSymbol}`;
     } else if (legalMoveType === 'transfer') {
-      label = `🔄 Perduoti su ${rank}${suitSymbol}`;
+      label = `🔄 Perduoti ${rank}${suitSymbol}`;
     }
 
     this.btnPlayCard.innerText = label;

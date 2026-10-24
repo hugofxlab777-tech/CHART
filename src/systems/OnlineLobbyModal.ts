@@ -32,49 +32,54 @@ export class OnlineLobbyModal {
     this.el.setAttribute('aria-modal', 'true');
     this.el.setAttribute('aria-label', 'Žaidimas internetu');
     this.el.innerHTML = `
-      <div class="modal-card" style="max-width:440px;width:92%;">
-        <h2 style="margin:0 0 4px;">🌐 Žaidimas internetu</h2>
-        <p style="margin:0 0 14px;opacity:.75;font-size:.9rem;">Žaiskite su draugais — pakanka kambario kodo. Šeimininkas valdo žaidimą.</p>
+      <div class="modal-card ol-card">
+        <div class="modal-header">
+          <h3>🌐 Žaidimas internetu</h3>
+          <button class="btn-close" data-ol-close aria-label="Uždaryti">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="ol-intro">Žaiskite su draugais — pakanka kambario kodo. Šeimininkas valdo žaidimą.</p>
 
-        <div id="ol-error" class="hidden" style="color:#ff8a80;font-size:.88rem;margin-bottom:10px;"></div>
+          <div id="ol-error" class="ol-error hidden"></div>
 
-        <!-- Meniu -->
-        <div id="ol-menu">
-          <label style="display:block;font-size:.85rem;margin-bottom:4px;">Jūsų vardas</label>
-          <input id="ol-name" type="text" maxlength="14" value="Žaidėjas" class="setup-input" style="width:100%;margin-bottom:14px;" />
-          <button id="ol-create" class="btn-action btn-gold-outline" style="width:100%;margin-bottom:10px;">🃏 Sukurti kambarį</button>
-          <div style="display:flex;gap:8px;">
-            <input id="ol-code" type="text" maxlength="5" placeholder="KODAS" class="setup-input" style="flex:1;text-transform:uppercase;letter-spacing:.2em;" />
-            <button id="ol-join" class="btn-action" style="flex:1;">➡ Prisijungti</button>
+          <!-- Meniu -->
+          <div id="ol-menu">
+            <label class="ol-label" for="ol-name">Jūsų vardas</label>
+            <input id="ol-name" type="text" maxlength="14" value="Žaidėjas" class="setup-input ol-input" />
+            <button id="ol-create" class="btn-action btn-gold-outline ol-btn-block">🃏 Sukurti kambarį</button>
+            <div class="ol-code-row">
+              <input id="ol-code" type="text" maxlength="5" placeholder="KODAS" class="setup-input ol-code-input" />
+              <button id="ol-join" class="btn-action ol-join-btn">➡ Prisijungti</button>
+            </div>
           </div>
-        </div>
 
-        <!-- Host rodinys -->
-        <div id="ol-host" class="hidden">
-          <div style="text-align:center;margin-bottom:12px;">
-            <div style="font-size:.85rem;opacity:.7;">Kambario kodas — perduokite draugams:</div>
-            <div id="ol-room-code" style="font-size:2rem;font-weight:700;letter-spacing:.35em;margin:6px 0;">—</div>
-            <button id="ol-copy" class="btn-action" style="padding:.4em 1em;">📋 Kopijuoti nuorodą</button>
+          <!-- Host rodinys -->
+          <div id="ol-host" class="hidden">
+            <div class="ol-room-center">
+              <div class="ol-room-hint">Kambario kodas — perduokite draugams:</div>
+              <div id="ol-room-code" class="ol-room-code">—</div>
+              <button id="ol-copy" class="btn-action ol-copy-btn">📋 Kopijuoti nuorodą</button>
+            </div>
+            <label class="ol-label" for="ol-seats">Žaidėjų vietų skaičius (AI užpildo laisvas)</label>
+            <select id="ol-seats" class="setup-input ol-select">
+              <option value="2">2 žaidėjai</option>
+              <option value="3" selected>3 žaidėjai</option>
+              <option value="4">4 žaidėjai</option>
+              <option value="5">5 žaidėjai</option>
+              <option value="6">6 žaidėjai</option>
+            </select>
+            <div id="ol-host-players" class="ol-players"></div>
+            <button id="ol-start" class="btn-action btn-play ol-btn-block" disabled>⏳ Laukiama žaidėjų…</button>
           </div>
-          <label style="display:block;font-size:.85rem;margin-bottom:4px;">Žaidėjų vietų skaičius (AI užpildo laisvas)</label>
-          <select id="ol-seats" class="setup-input" style="width:100%;margin-bottom:12px;">
-            <option value="2">2 žaidėjai</option>
-            <option value="3" selected>3 žaidėjai</option>
-            <option value="4">4 žaidėjai</option>
-            <option value="5">5 žaidėjai</option>
-            <option value="6">6 žaidėjai</option>
-          </select>
-          <div id="ol-host-players" style="margin-bottom:12px;font-size:.92rem;"></div>
-          <button id="ol-start" class="btn-action btn-play" style="width:100%;" disabled>⏳ Laukiama žaidėjų…</button>
-        </div>
 
-        <!-- Client rodinys -->
-        <div id="ol-client" class="hidden">
-          <div id="ol-client-status" style="margin-bottom:10px;font-size:.92rem;">Jungiamasi…</div>
-          <div id="ol-client-players" style="font-size:.92rem;"></div>
-        </div>
+          <!-- Client rodinys -->
+          <div id="ol-client" class="hidden">
+            <div id="ol-client-status" class="ol-status">Jungiamasi…</div>
+            <div id="ol-client-players" class="ol-players"></div>
+          </div>
 
-        <button id="ol-back" class="btn-action" style="width:100%;margin-top:14px;">⬅ Atgal / Baigti</button>
+          <button id="ol-back" class="btn-action btn-outline ol-back">⬅ Atgal / Baigti</button>
+        </div>
       </div>
     `;
     document.body.appendChild(this.el);
@@ -116,6 +121,9 @@ export class OnlineLobbyModal {
     this.el.querySelector('#ol-back')!.addEventListener('click', () => {
       ModalManager.close(this.el);
     });
+    this.el.querySelector('[data-ol-close]')!.addEventListener('click', () => {
+      ModalManager.close(this.el);
+    });
   }
 
   public open(prefillCode?: string): void {
@@ -154,9 +162,9 @@ export class OnlineLobbyModal {
       .map((p) => `<div>🧑 <strong>${escapeHtml(p.name)}</strong>${p.seat === 0 ? ' (šeimininkas)' : ''}</div>`)
       .join('');
     const missing = Math.max(totalSeats - players.length, 0);
-    const waiting = Array.from({ length: missing }, () => '<div style="opacity:.45;">⏳ laukia žaidėjo…</div>').join('');
+    const waiting = Array.from({ length: missing }, () => '<div class="ol-player-waiting">⏳ laukia žaidėjo…</div>').join('');
     this.hostPlayersEl.innerHTML = list + waiting;
-    this.clientPlayersEl.innerHTML = `<div style="opacity:.7;margin-bottom:6px;">Kambarys (${players.length}/${totalSeats}):</div>` + list + waiting;
+    this.clientPlayersEl.innerHTML = `<div class="ol-players-title">Kambarys (${players.length}/${totalSeats}):</div>` + list + waiting;
     this.updateHostStart(players.length >= 2);
   }
 

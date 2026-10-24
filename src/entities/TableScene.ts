@@ -5,6 +5,9 @@ export class TableScene {
   public readonly feltMesh: THREE.Mesh;
   public readonly chipsGroup = new THREE.Group();
   private readonly deckTrayGroup = new THREE.Group();
+  private markingsMesh!: THREE.Mesh;
+  private markingsTexLandscape!: THREE.CanvasTexture;
+  private markingsTexPortrait!: THREE.CanvasTexture;
 
   constructor() {
     const tableWidth = 18;
@@ -62,10 +65,19 @@ export class TableScene {
   public setMobileLayout(isMobilePortrait: boolean): void {
     if (isMobilePortrait) {
       this.chipsGroup.visible = false;
-      this.deckTrayGroup.position.set(3.4, 0.01, -2.4);
+      this.deckTrayGroup.position.set(3.2, 0.01, -2.4);
     } else {
       this.chipsGroup.visible = true;
       this.deckTrayGroup.position.set(5.8, 0.01, 0);
+    }
+
+    // Portrete kaladė ir bita guli prie (±3.2, -2.4) — žymėjimai perjungiami
+    // atitinkamai, kad paišytos zonos nesiblaškytų už kadro.
+    const mat = this.markingsMesh.material as THREE.MeshBasicMaterial;
+    const tex = isMobilePortrait ? this.markingsTexPortrait : this.markingsTexLandscape;
+    if (mat.map !== tex) {
+      mat.map = tex;
+      mat.needsUpdate = true;
     }
   }
 
@@ -167,10 +179,39 @@ export class TableScene {
   }
 
   private addTableMarkings(): void {
+    // Zonų (BITA / KALADĖ) pozicijos pasaulio koordinatėse — portrete krūvos
+    // guli arčiau centro ir aukščiau, kad tilptų siaurame kadre.
+    this.markingsTexLandscape = this.createMarkingsTexture({ x: -5.91, z: 0 }, { x: 5.91, z: 0 });
+    this.markingsTexPortrait = this.createMarkingsTexture({ x: -3.2, z: -2.4 }, { x: 3.2, z: -2.4 });
+
+    const markingsPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(17.2, 11.4),
+      new THREE.MeshBasicMaterial({
+        map: this.markingsTexLandscape,
+        transparent: true,
+        opacity: 0.75, // Non-emissive, subtle integration into felt
+        depthWrite: false,
+      })
+    );
+    markingsPlane.rotation.x = -Math.PI / 2;
+    markingsPlane.position.y = 0.004;
+    this.markingsMesh = markingsPlane;
+    this.group.add(markingsPlane);
+  }
+
+  private createMarkingsTexture(
+    bitaWorld: { x: number; z: number },
+    kaladeWorld: { x: number; z: number }
+  ): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 1024;
     canvas.height = 682;
     const ctx = canvas.getContext('2d')!;
+    // Canvas viršus = tolimoji stalo pusė (world -Z), apačia = arti žaidėjo (+Z)
+    const toCanvas = (w: { x: number; z: number }) => ({
+      cx: (w.x / 17.2 + 0.5) * 1024,
+      cy: (w.z / 11.4 + 0.5) * 682,
+    });
 
     ctx.strokeStyle = 'rgba(197, 166, 93, 0.28)'; // Muted gold token #C5A65D
     ctx.lineWidth = 2.5;
@@ -226,52 +267,38 @@ export class TableScene {
     ctx.fillText('ROYAL DURAK CLUB', 0, 22);
     ctx.restore();
 
-    // Left Zone: BITA (Discard pile) outline
+    this.drawZoneMarking(ctx, toCanvas(bitaWorld), 'BITA', true);
+    this.drawZoneMarking(ctx, toCanvas(kaladeWorld), 'KALADĖ', false);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    return tex;
+  }
+
+  private drawZoneMarking(
+    ctx: CanvasRenderingContext2D,
+    pos: { cx: number; cy: number },
+    label: string,
+    dashed: boolean
+  ): void {
     ctx.save();
-    ctx.translate(160, 341);
-    ctx.strokeStyle = 'rgba(197, 166, 93, 0.26)';
-    ctx.setLineDash([8, 6]);
+    ctx.translate(pos.cx, pos.cy);
+    ctx.strokeStyle = 'rgba(197, 166, 93, 0.28)';
+    if (dashed) {
+      ctx.setLineDash([8, 6]);
+    }
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.roundRect(-55, -80, 110, 160, 12);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(197, 166, 93, 0.35)';
-    ctx.font = 'bold 16px "Cinzel", serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BITA', 0, 102);
-    ctx.restore();
-
-    // Right Zone: KALADĖ (Deck & Trump) outline
-    ctx.save();
-    ctx.translate(842, 341);
-    ctx.strokeStyle = 'rgba(197, 166, 93, 0.28)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(-55, -80, 110, 160, 12);
-    ctx.stroke();
     ctx.fillStyle = 'rgba(197, 166, 93, 0.38)';
     ctx.font = 'bold 16px "Cinzel", serif';
     ctx.textAlign = 'center';
-    ctx.fillText('KALADĖ', 0, 102);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, 102);
     ctx.restore();
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.anisotropy = 8;
-
-    const markingsPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(17.2, 11.4),
-      new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        opacity: 0.75, // Non-emissive, subtle integration into felt
-        depthWrite: false,
-      })
-    );
-    markingsPlane.rotation.x = -Math.PI / 2;
-    markingsPlane.position.y = 0.004;
-    this.group.add(markingsPlane);
   }
 
   private addDeckTray(): void {

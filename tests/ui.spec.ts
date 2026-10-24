@@ -61,18 +61,31 @@ test.describe('Three.js Game UI Designer Tests', () => {
     const statusText = await statusLine.innerText();
     expect(statusText.length).toBeGreaterThan(0);
 
-    // 5. Rules Modal open & close
-    const btnRules = page.locator('#btn-rules');
-    await btnRules.click({ force: true });
+    // 5. Rules Modal open & close (mobiliai atidarome per meniu drawerį)
+    if (isMobile) {
+      await page.locator('#btn-mobile-menu').click({ force: true });
+      const drawerRules = page.locator('#drawer-btn-rules');
+      await expect(drawerRules).toBeInViewport(); // laukiame drawerio įslinkimo animacijos
+      await drawerRules.click({ force: true });
+    } else {
+      await page.locator('#btn-rules').click({ force: true });
+    }
     const rulesModal = page.locator('#teacher-modal');
     await expect(rulesModal).toBeVisible();
     await page.locator('#btn-close-rules').click({ force: true });
     await expect(rulesModal).toHaveClass(/hidden/);
 
     // 5b. DURAK_CUSTOM_GAME_SETUP Wizard Modal test
-    const btnSetup = page.locator('#btn-setup');
-    await expect(btnSetup).toBeVisible();
-    await btnSetup.click({ force: true });
+    if (isMobile) {
+      await page.locator('#btn-mobile-menu').click({ force: true });
+      const drawerSetup = page.locator('#drawer-btn-setup');
+      await expect(drawerSetup).toBeInViewport();
+      await drawerSetup.click({ force: true });
+    } else {
+      const btnSetup = page.locator('#btn-setup');
+      await expect(btnSetup).toBeVisible();
+      await btnSetup.click({ force: true });
+    }
     const setupModal = page.locator('#setup-modal');
     await expect(setupModal).toBeVisible();
 
