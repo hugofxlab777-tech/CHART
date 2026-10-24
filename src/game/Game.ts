@@ -545,8 +545,9 @@ export class Game {
         if (instant) {
           mesh.position.copy(trumpPos);
           mesh.rotation.copy(targetRot);
+          mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, trumpPos, targetRot, duration, 0.3);
+          this.animator.animateTo(mesh, trumpPos, targetRot, duration, 0.3, undefined, 1);
         }
       } else {
         const stackY = 0.055 + idx * 0.016;
@@ -555,8 +556,9 @@ export class Game {
         if (instant) {
           mesh.position.copy(targetPos);
           mesh.rotation.copy(targetRot);
+          mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.2);
+          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.2, undefined, 1);
         }
       }
     });
@@ -574,8 +576,9 @@ export class Game {
       if (instant) {
         mesh.position.copy(targetPos);
         mesh.rotation.copy(targetRot);
+        mesh.scale.setScalar(1);
       } else {
-        this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.6);
+        this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.6, undefined, 1);
       }
     });
 
@@ -595,8 +598,10 @@ export class Game {
         : human.hand.slice(this.handStartIndex, this.handStartIndex + this.handPageSize);
 
     const visibleCount = visibleSlice.length;
-    const maxHandWidth = isMobilePortrait ? 5.6 : isShortLandscape ? 7.2 : 8.2;
-    const spacing = Math.min(1.15, maxHandWidth / Math.max(visibleCount, 1));
+    const maxHandWidth = isMobilePortrait ? 6.8 : isShortLandscape ? 8.4 : 9.4;
+    const spacing = Math.min(1.5, maxHandWidth / Math.max(visibleCount, 1));
+    // Didelės, gerai matomos rankos kortos: telefonas didžiausias mastelis
+    const handScale = isMobilePortrait ? 1.55 : isShortLandscape ? 1.3 : 1.4;
     const startX = -((visibleCount - 1) * spacing) / 2;
 
     human.hand.forEach((card, overallIdx) => {
@@ -613,7 +618,7 @@ export class Game {
         const forwardZ = isSelected ? -0.3 : 0;
         const baseZ = isMobilePortrait ? 4.9 : isShortLandscape ? 3.6 : 4.2;
         const posZ = baseZ + Math.abs(posX) * 0.04 + forwardZ;
-        const arcY = (isMobilePortrait ? 0.95 : 0.82) - Math.abs(posX) * 0.035 + liftY;
+        const arcY = (isMobilePortrait ? 1.05 : 0.92) - Math.abs(posX) * 0.035 + liftY;
         const rotZ = -posX * 0.045;
 
         const targetPos = new THREE.Vector3(posX, arcY, posZ);
@@ -624,8 +629,9 @@ export class Game {
         if (instant) {
           mesh.position.copy(targetPos);
           mesh.rotation.copy(targetRot);
+          mesh.scale.setScalar(handScale);
         } else {
-          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.4);
+          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.4, undefined, handScale);
         }
       } else {
         // Hidden off-screen in pager: stack neatly to left or right
@@ -639,8 +645,9 @@ export class Game {
         if (instant) {
           mesh.position.copy(tuckedPos);
           mesh.rotation.copy(tuckedRot);
+          mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, tuckedPos, tuckedRot, duration, 0.4);
+          this.animator.animateTo(mesh, tuckedPos, tuckedRot, duration, 0.4, undefined, 1);
         }
       }
     });
@@ -717,8 +724,9 @@ export class Game {
         if (instant) {
           mesh.position.copy(targetPos);
           mesh.rotation.copy(targetRot);
+          mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.4);
+          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.4, undefined, 1);
         }
       });
     }
@@ -740,8 +748,9 @@ export class Game {
         if (instant) {
           atkMesh.position.copy(targetPos);
           atkMesh.rotation.copy(targetRot);
+          atkMesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(atkMesh, targetPos, targetRot, duration, 0.5);
+          this.animator.animateTo(atkMesh, targetPos, targetRot, duration, 0.5, undefined, 1);
         }
       }
 
@@ -754,8 +763,9 @@ export class Game {
           if (instant) {
             defMesh.position.copy(targetPos);
             defMesh.rotation.copy(targetRot);
+            defMesh.scale.setScalar(1);
           } else {
-            this.animator.animateTo(defMesh, targetPos, targetRot, duration, 0.55);
+            this.animator.animateTo(defMesh, targetPos, targetRot, duration, 0.55, undefined, 1);
           }
         }
       }

@@ -6,6 +6,8 @@ export interface CardAnimation {
   targetPos: THREE.Vector3;
   startRot: THREE.Euler;
   targetRot: THREE.Euler;
+  startScale: number;
+  targetScale: number;
   duration: number;
   elapsed: number;
   peakY: number;
@@ -21,7 +23,8 @@ export class CardAnimator {
     targetRot: THREE.Euler,
     duration: number = 0.35,
     peakY: number = 0.8,
-    onComplete?: () => void
+    onComplete?: () => void,
+    targetScale?: number
   ): void {
     // Remove any existing animation for this mesh
     this.activeAnimations = this.activeAnimations.filter((a) => a.mesh !== mesh);
@@ -32,6 +35,8 @@ export class CardAnimator {
       targetPos: targetPos.clone(),
       startRot: mesh.rotation.clone(),
       targetRot: targetRot.clone(),
+      startScale: mesh.scale.x,
+      targetScale: targetScale ?? mesh.scale.x,
       duration: Math.max(duration, 0.05),
       elapsed: 0,
       peakY,
@@ -60,9 +65,13 @@ export class CardAnimator {
       const qCurrent = new THREE.Quaternion().slerpQuaternions(qStart, qTarget, ease);
       anim.mesh.setRotationFromQuaternion(qCurrent);
 
+      const currentScale = anim.startScale + (anim.targetScale - anim.startScale) * ease;
+      anim.mesh.scale.setScalar(currentScale);
+
       if (t >= 1.0) {
         anim.mesh.position.copy(anim.targetPos);
         anim.mesh.rotation.copy(anim.targetRot);
+        anim.mesh.scale.setScalar(anim.targetScale);
         if (anim.onComplete) anim.onComplete();
         this.activeAnimations.splice(i, 1);
       }
@@ -73,6 +82,7 @@ export class CardAnimator {
     for (const anim of this.activeAnimations) {
       anim.mesh.position.copy(anim.targetPos);
       anim.mesh.rotation.copy(anim.targetRot);
+      anim.mesh.scale.setScalar(anim.targetScale);
       if (anim.onComplete) anim.onComplete();
     }
     this.activeAnimations = [];
