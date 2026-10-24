@@ -12,6 +12,9 @@ import { SetupWizardModal } from '../systems/SetupWizardModal';
 import { LeaderboardManager } from '../engine/Leaderboard';
 import { LeaderboardModal } from '../systems/LeaderboardModal';
 import { Toast, confirmDialog } from '../systems/Ui';
+import { OnlineLobbyModal } from '../systems/OnlineLobbyModal';
+import { MultiplayerService, generateRoomCode, type NetSnapshot } from '../engine/OnlineMultiplayer';
+import { DEFAULT_DURAK_CONFIG } from '../engine/GameSetupConfig';
 import { GraphicsQualityManager, type GraphicsSettings } from '../core/GraphicsQuality';
 import {
   createRenderer,
@@ -62,6 +65,12 @@ export class Game {
   private aiTurnTimeout: any = null;
   private matchRecorded = false;
 
+  // Internetinis režimas (host-authoritative per PeerJS)
+  private readonly net = new MultiplayerService();
+  private readonly lobby: OnlineLobbyModal;
+  private localSeat = 0;
+  private onlineSeatCount = 0;
+
   // Touch tracking to distinguish scrolling from tapping
   private pointerDownPos: { x: number; y: number; time: number } | null = null;
 
@@ -85,9 +94,13 @@ export class Game {
     this.engine = new DurakEngine({ variant: 'podkidnoy_durak', playerCount: 2 }, this.rng);
     this.ai = new DurakAI(this.engine);
     this.setupWizard = new SetupWizardModal('setup-modal');
+    this.lobby = new OnlineLobbyModal();
     this.setupWizard.setOnStartGame((cfg) => {
       this.startNewGame({ customConfig: cfg });
     });
+    this.setupNetService();
+    this.setupLobby();
+    (window as any).__NET_DEBUG__ = this.net;
 
     this.setupHudCallbacks();
     this.setupInteractions();
@@ -144,13 +157,18 @@ export class Game {
       onRestart: () => this.confirmAndRestart(),
       onOpenSetup: () => this.setupWizard.open(this.engine.customConfig),
       onOpenLeaderboard: () => this.leaderboardModal.open(),
+      onOpenOnline: () => {
+        // Iš URL ?kambarys=KODAS prefill'inam kodą
+        const params = new URLSearchParams(window.location.search);
+        this.lobby.open(params.get('kambarys')?.toUpperCase() || undefined);
+      },
       onToggleAudio: () => this.audio.toggleMute(),
       onPlaySelectedCard: () => this.playSelectedCard(),
       onGraphicsChange: (preset) => {
         this.graphicsQuality.setPreset(preset);
       },
       onHandPage: (direction) => {
-        const human = this.engine.players[0];
+        const human = this.me();
         if (!human) return;
         const total = human.hand.length;
         const newStart = this.handStartIndex + direction * this.handPageSize;
@@ -172,6 +190,23 @@ export class Game {
   }
 
   private confirmAndRestart(): void {
+    if (this.net.isActive() && !this.net.isHost()) {
+      Toast.show('Naują žaidimą pradeda tik kambario šeimininkas.', 'info');
+      return;
+    }
+    if (this.net.isActive()) {
+      // Internetinis žaidimas: tas pats kambarys, nauja partija
+      confirmDialog({
+        title: 'Naujas žaidimas',
+        message: 'Pradėti naują partiją su esamais kambario žaidėjais?',
+        confirmLabel: 'Pradėti iš naujo',
+        cancelLabel: 'Tęsti partiją',
+        danger: true,
+      }).then((confirmed) => {
+        if (confirmed) this.startOnlineAsHost();
+      });
+      return;
+    }
     const isGameActive = !this.engine.gameOver && (this.engine.roundNumber > 1 || this.engine.table.length > 0);
     if (!isGameActive) {
       this.startNewGame();
@@ -193,6 +228,7 @@ export class Game {
 
   public startNewGame(options?: any): void {
     if (this.aiTurnTimeout) clearTimeout(this.aiTurnTimeout);
+    if (!options?.keepOnline) this.resetOnline();
     this.vfx.clear();
     this.hoveredCard = null;
     this.selectedCardId = null;
@@ -233,6 +269,254 @@ export class Game {
     this.hud.update(this.engine, this.getPlayerLegalMoveNames());
     this.hud.updateSelectedCardAction(null, null);
     this.triggerAiTurnIfNeeded();
+  }
+
+  // ===== Internetinio žaidimo logika (host-authoritative per PeerJS) =====
+
+  private me() {
+    return this.engine.players[this.localSeat];
+  }
+
+  private resetOnline(): void {
+    this.localSeat = 0;
+    this.onlineSeatCount = 0;
+    if (this.net.isActive()) {
+      this.net.teardown();
+    }
+  }
+
+  private setupNetService(): void {
+    this.net.onStatus = (status, detail) => {
+      if (status === 'hosting') {
+        this.lobby.showHostView(this.net.roomCode || '—');
+      } else if (status === 'waiting') {
+        this.lobby.showClientView('Prisijungta — laukiama, kol šeimininkas pradės žaidimą…');
+      } else if (status === 'error') {
+        if (this.lobby.isOpen()) {
+          this.lobby.showError(detail || 'Tinklo klaida.');
+        } else {
+          Toast.show(detail || 'Tinklo klaida.', 'error', 4000);
+        }
+      }
+    };
+
+    this.net.onLobbyUpdate = (players) => {
+      const seats = this.net.isHost() ? this.lobby.getSeatCount() : this.onlineSeatCount;
+      this.lobby.updatePlayers(players, players[0]?.name || 'Šeimininkas', seats);
+    };
+
+    this.net.onStart = (seat, configJson, snapshot) => {
+      this.startOnlineAsClient(seat, configJson, snapshot);
+    };
+
+    this.net.onState = (snapshot) => {
+      this.applySnapshot(snapshot);
+    };
+
+    this.net.onMove = (seat, move) => {
+      if (!this.net.isHost()) return;
+      if (move.playerId !== seat) return;
+      const success = this.engine.executeMove(move);
+      if (success) {
+        this.afterHostMove(move);
+      }
+    };
+
+    this.net.onNotice = (text) => {
+      Toast.show(text, 'info', 3600);
+    };
+  }
+
+  private setupLobby(): void {
+    this.lobby.onCreateRoom = (name, seatCount) => {
+      const code = generateRoomCode();
+      this.onlineSeatCount = seatCount;
+      this.net.hostRoom(code, name);
+    };
+
+    this.lobby.onJoinRoom = (code, name) => {
+      this.net.joinRoom(code, name);
+      this.lobby.showClientView('Jungiamasi…');
+    };
+
+    this.lobby.onStartGame = () => {
+      if (!this.net.isHost()) return;
+      this.startOnlineAsHost();
+    };
+  }
+
+  private startOnlineAsHost(): void {
+    const players = this.net.getConnectedPlayers();
+    const seats = Math.max(this.lobby.getSeatCount(), players.length);
+    this.onlineSeatCount = seats;
+
+    const names: string[] = [];
+    const humanPlayers: string[] = [];
+    const aiNames = ['AI Jonas', 'AI Rasa', 'AI Tomas', 'AI Rytis', 'AI Saulė', 'AI Eglė', 'AI Domas'];
+    for (let i = 0; i < seats; i++) {
+      if (i < players.length) {
+        names.push(players[i].name);
+        humanPlayers.push(players[i].name);
+      } else {
+        names.push(aiNames[(i - players.length) % aiNames.length] + (i >= players.length + aiNames.length ? ` ${i}` : ''));
+      }
+    }
+
+    const cfg = JSON.parse(JSON.stringify(DEFAULT_DURAK_CONFIG)) as typeof DEFAULT_DURAK_CONFIG;
+    cfg.players = {
+      count: seats,
+      names,
+      human_players: humanPlayers,
+      ai_difficulty: 'normal',
+    };
+    cfg.interface.show_ai_hands = false;
+
+    const options = { customConfig: cfg };
+    this.engine = new DurakEngine(options, this.rng);
+    this.ai = new DurakAI(this.engine);
+    this.localSeat = 0;
+    this.matchRecorded = false;
+
+    this.engine.initGame(names);
+    this.rebuildCardMeshes();
+    this.audio.playSuccess();
+    this.sync3DCardPositions(true);
+    this.hud.update(this.engine, this.getPlayerLegalMoveNames());
+    this.hud.updateSelectedCardAction(null, null);
+    this.broadcastStateNow();
+    this.triggerAiTurnIfNeeded();
+
+    this.net.startGame(JSON.stringify(cfg), this.buildSnapshot(), this.net.getConnectionSeatMap());
+    this.lobby.close();
+    Toast.show(`Kambarys ${this.net.roomCode}: žaidimas pradėtas!`, 'success');
+  }
+
+  private startOnlineAsClient(seat: number, configJson: string, snapshot: NetSnapshot): void {
+    const cfg = JSON.parse(configJson);
+    const options = { customConfig: cfg };
+    this.engine = new DurakEngine(options, this.rng);
+    this.ai = new DurakAI(this.engine);
+    this.localSeat = seat;
+    this.matchRecorded = false;
+    this.applySnapshot(snapshot, true);
+
+    this.lobby.close();
+    Toast.show(`Prisijungėte kaip ${snapshot.players[seat]?.name || `žaidėjas ${seat + 1}`}.`, 'info');
+  }
+
+  private buildSnapshot(): NetSnapshot {
+    return {
+      options: JSON.parse(JSON.stringify(this.engine.options)),
+      customConfig: JSON.parse(JSON.stringify(this.engine.customConfig)),
+      players: JSON.parse(JSON.stringify(this.engine.players)),
+      deck: JSON.parse(JSON.stringify(this.engine.deck)),
+      trumpCard: JSON.parse(JSON.stringify(this.engine.trumpCard)),
+      trumpSuit: this.engine.trumpSuit,
+      discardPile: JSON.parse(JSON.stringify(this.engine.discardPile)),
+      table: JSON.parse(JSON.stringify(this.engine.table)),
+      attackerIndex: this.engine.attackerIndex,
+      defenderIndex: this.engine.defenderIndex,
+      roundNumber: this.engine.roundNumber,
+      defenderTaking: this.engine.defenderTaking,
+      passes: [...this.engine.passes],
+      gameOver: this.engine.gameOver,
+      loserPlayerId: this.engine.loserPlayerId,
+      isDraw: this.engine.isDraw,
+      lastRefereeMessage: this.engine.lastRefereeMessage,
+    };
+  }
+
+  private applySnapshot(snapshot: NetSnapshot, instant: boolean = false): void {
+    this.engine.options = snapshot.options as typeof this.engine.options;
+    this.engine.customConfig = snapshot.customConfig as typeof this.engine.customConfig;
+    this.engine.players = JSON.parse(JSON.stringify(snapshot.players));
+    this.engine.deck = JSON.parse(JSON.stringify(snapshot.deck));
+    this.engine.trumpCard = JSON.parse(JSON.stringify(snapshot.trumpCard));
+    this.engine.trumpSuit = snapshot.trumpSuit;
+    this.engine.discardPile = JSON.parse(JSON.stringify(snapshot.discardPile));
+    this.engine.table = JSON.parse(JSON.stringify(snapshot.table));
+    this.engine.attackerIndex = snapshot.attackerIndex;
+    this.engine.defenderIndex = snapshot.defenderIndex;
+    this.engine.roundNumber = snapshot.roundNumber;
+    this.engine.defenderTaking = snapshot.defenderTaking;
+    this.engine.passes = new Set(snapshot.passes);
+    this.engine.gameOver = snapshot.gameOver;
+    this.engine.loserPlayerId = snapshot.loserPlayerId;
+    this.engine.isDraw = snapshot.isDraw;
+    this.engine.lastRefereeMessage = snapshot.lastRefereeMessage;
+
+    this.createMissingCardMeshes();
+    this.sync3DCardPositions(instant);
+    this.hud.update(this.engine, this.getPlayerLegalMoveNames());
+    this.publishDiagnostics();
+    this.checkAndRecordGameOver();
+  }
+
+  private broadcastStateNow(): void {
+    if (this.net.isHost()) {
+      this.net.broadcastState(this.buildSnapshot());
+    }
+  }
+
+  /** Vienetas po sėkmingo ėjimo (host arba offline žaidime). */
+  private afterHostMove(move: Move): void {
+    if (move.type === 'beat') this.audio.playCardBeat();
+    else if (move.type === 'take') this.audio.playCardTake();
+    else this.audio.playCardPlay();
+
+    if (move.card) {
+      this.emitMoveVfx(move.card);
+    }
+    this.sync3DCardPositions();
+    this.hud.update(this.engine, this.getPlayerLegalMoveNames());
+    this.publishDiagnostics();
+    this.checkAndRecordGameOver();
+    this.broadcastStateNow();
+    this.triggerAiTurnIfNeeded();
+  }
+
+  /** Maršrutizuoja žmogaus ėjimą: klientas siunčia hostui, hostas vykdo vietoje. */
+  private submitMove(move: Move, onAccepted: (success: boolean) => void): void {
+    if (this.net.isActive() && !this.net.isHost()) {
+      this.net.sendMove(move);
+      // Klientas nevykdo ėjimo vietoje – laukia hosto būsenos
+      onAccepted(true);
+      return;
+    }
+    const success = this.engine.executeMove(move);
+    if (success) {
+      this.afterHostMove(move);
+    }
+    onAccepted(success);
+  }
+
+  private rebuildCardMeshes(): void {
+    for (const [, mesh] of this.cardMeshes) {
+      this.scene.remove(mesh);
+    }
+    this.cardMeshes.clear();
+    this.createMissingCardMeshes();
+  }
+
+  private createMissingCardMeshes(): void {
+    const all: Card[] = [];
+    for (const p of this.engine.players) all.push(...p.hand);
+    all.push(...this.engine.deck);
+    all.push(...this.engine.discardPile);
+    if (this.engine.trumpCard) all.push(this.engine.trumpCard);
+    for (const b of this.engine.table) {
+      all.push(b.attack);
+      if (b.defense) all.push(b.defense);
+    }
+
+    for (const c of all) {
+      if (this.cardMeshes.has(c.id)) continue;
+      const mesh = CardFactory.createCardMesh(c);
+      mesh.position.set(5.8, 0.5, 0);
+      mesh.rotation.set(0, 0, Math.PI);
+      this.scene.add(mesh);
+      this.cardMeshes.set(c.id, mesh);
+    }
   }
 
   private sync3DCardPositions(instant: boolean = false): void {
@@ -296,7 +580,7 @@ export class Game {
     });
 
     // 3. Position PLAYER'S HAND (Human at bottom center)
-    const human = this.engine.players[0];
+    const human = this.me();
     const totalCards = human.hand.length;
 
     // Dynamic hand page sizing
@@ -364,10 +648,13 @@ export class Game {
     this.hud.updateHandPager(totalCards, this.handStartIndex, this.handPageSize);
 
     // 4. Position OPPONENT HANDS (2 to 8 players)
+    // Vietos sukamos taip, kad vietinis žaidėjas visada būtų apačioje;
+    // priešininkų lizdas k (1..n-1) atitinka stalą (localSeat + k) % n.
     const totalPlayers = this.engine.players.length;
     const showAiHands = this.engine.customConfig.interface.show_ai_hands;
 
-    for (let pIdx = 1; pIdx < totalPlayers; pIdx++) {
+    for (let slot = 1; slot < totalPlayers; slot++) {
+      const pIdx = (this.localSeat + slot) % totalPlayers;
       const opp = this.engine.players[pIdx];
       const count = opp.hand.length;
       const oppSpacing = Math.min(0.75, (isMobilePortrait ? 3.2 : 4.2) / Math.max(count, 1));
@@ -380,7 +667,7 @@ export class Game {
         basePos = new THREE.Vector3(0, 0.55, isMobilePortrait ? -4.8 : -4.35);
         baseAngleY = 0;
       } else if (totalPlayers === 3) {
-        if (pIdx === 1) {
+        if (slot === 1) {
           basePos = new THREE.Vector3(isMobilePortrait ? -3.4 : -4.5, 0.55, -3.8);
           baseAngleY = 0.45;
         } else {
@@ -388,10 +675,10 @@ export class Game {
           baseAngleY = -0.45;
         }
       } else if (totalPlayers === 4) {
-        if (pIdx === 1) {
+        if (slot === 1) {
           basePos = new THREE.Vector3(0, 0.55, -4.35);
           baseAngleY = 0;
-        } else if (pIdx === 2) {
+        } else if (slot === 2) {
           basePos = new THREE.Vector3(isMobilePortrait ? -4.5 : -7.5, 0.5, -0.6);
           baseAngleY = Math.PI / 2;
         } else {
@@ -399,7 +686,7 @@ export class Game {
           baseAngleY = -Math.PI / 2;
         }
       } else {
-        const progress = (pIdx - 1) / Math.max(totalPlayers - 2, 1);
+        const progress = (slot - 1) / Math.max(totalPlayers - 2, 1);
         const angle = Math.PI * (0.88 - progress * 0.76);
         const rx = isMobilePortrait ? 4.8 : 7.5;
         const rz = isMobilePortrait ? 3.6 : 4.2;
@@ -493,7 +780,7 @@ export class Game {
       if (root && root.userData && root.userData.isCard) {
         const cardGroup = root as THREE.Group;
         const card = cardGroup.userData.card as Card;
-        const isHumanCard = this.engine.players[0].hand.some((c) => c.id === card.id);
+        const isHumanCard = this.me().hand.some((c) => c.id === card.id);
         if (isHumanCard) {
           return { cardGroup, card };
         }
@@ -568,7 +855,7 @@ export class Game {
   }
 
   private handleCardSelectionOrPlay(card: Card): void {
-    const legalMoves = this.engine.getLegalMovesForPlayer(0);
+    const legalMoves = this.engine.getLegalMovesForPlayer(this.localSeat);
     const matchingMoves = legalMoves.filter((m) => m.card && m.card.id === card.id);
 
     if (matchingMoves.length === 0) {
@@ -610,7 +897,7 @@ export class Game {
     if (!this.selectedCardId) return;
 
     const cardId = this.selectedCardId;
-    const legalMoves = this.engine.getLegalMovesForPlayer(0);
+    const legalMoves = this.engine.getLegalMovesForPlayer(this.localSeat);
     const matchingMoves = legalMoves.filter((m) => m.card && m.card.id === cardId);
 
     if (matchingMoves.length === 0) {
@@ -626,27 +913,15 @@ export class Game {
       move = matchingMoves[0];
     }
 
-    const success = this.engine.executeMove(move);
-
-    if (success) {
-      this.selectedCardId = null;
-      this.hud.updateSelectedCardAction(null, null);
-
-      if (move.type === 'beat') this.audio.playCardBeat();
-      else this.audio.playCardPlay();
-
-      if (move.card) {
-        this.emitMoveVfx(move.card);
+    this.submitMove(move, (success) => {
+      if (success) {
+        this.selectedCardId = null;
+        this.hud.updateSelectedCardAction(null, null);
+      } else {
+        this.audio.playError();
+        this.hud.showRefereeAlert(this.engine.lastRefereeMessage);
       }
-      this.sync3DCardPositions();
-      this.hud.update(this.engine, this.getPlayerLegalMoveNames());
-      this.publishDiagnostics();
-      this.checkAndRecordGameOver();
-      this.triggerAiTurnIfNeeded();
-    } else {
-      this.audio.playError();
-      this.hud.showRefereeAlert(this.engine.lastRefereeMessage);
-    }
+    });
   }
 
   private emitMoveVfx(card?: Card): void {
@@ -656,7 +931,7 @@ export class Game {
   }
 
   private handlePlayerAction(action: 'take' | 'pass'): void {
-    const legalMoves = this.engine.getLegalMovesForPlayer(0);
+    const legalMoves = this.engine.getLegalMovesForPlayer(this.localSeat);
     const move = legalMoves.find((m) => m.type === action);
 
     if (!move) {
@@ -665,27 +940,19 @@ export class Game {
       return;
     }
 
-    const success = this.engine.executeMove(move);
-    if (success) {
-      this.selectedCardId = null;
-      this.hud.updateSelectedCardAction(null, null);
-
-      if (action === 'take') this.audio.playCardTake();
-      else this.audio.playCardPlay();
-
-      this.sync3DCardPositions();
-      this.hud.update(this.engine, this.getPlayerLegalMoveNames());
-      this.publishDiagnostics();
-      this.checkAndRecordGameOver();
-      this.triggerAiTurnIfNeeded();
-    } else {
-      this.audio.playError();
-      this.hud.showRefereeAlert(this.engine.lastRefereeMessage);
-    }
+    this.submitMove(move, (success) => {
+      if (success) {
+        this.selectedCardId = null;
+        this.hud.updateSelectedCardAction(null, null);
+      } else {
+        this.audio.playError();
+        this.hud.showRefereeAlert(this.engine.lastRefereeMessage);
+      }
+    });
   }
 
   private handleHint(): void {
-    const best = this.ai.getBestMove(0);
+    const best = this.ai.getBestMove(this.localSeat);
     if (best) {
       if (best.card) {
         this.selectedCardId = best.card.id;
@@ -703,7 +970,9 @@ export class Game {
   private checkAndRecordGameOver(): void {
     if (this.engine.gameOver && !this.matchRecorded) {
       this.matchRecorded = true;
-      const humanWon = this.engine.loserPlayerId !== 0 && !this.engine.isDraw;
+      // Reitingus registruoja tik šeimininkas / offline žaidimas
+      if (this.net.isActive() && !this.net.isHost()) return;
+      const humanWon = this.engine.loserPlayerId !== this.localSeat && !this.engine.isDraw;
       const loser = this.engine.players.find((p) => p.id === this.engine.loserPlayerId);
       const loserName = loser ? loser.name : 'Nėra';
       this.leaderboard.recordMatch(humanWon, loserName, this.engine.roundNumber);
@@ -717,16 +986,21 @@ export class Game {
       return;
     }
 
+    // Internetiniame žaidime AI valdo tik šeimininkas
+    if (this.net.isActive() && !this.net.isHost()) return;
+
     if (this.aiTurnTimeout) clearTimeout(this.aiTurnTimeout);
 
     const aiDelay = this.reducedMotion ? 120 : 650;
     this.aiTurnTimeout = setTimeout(() => {
       // Find an AI player that has a legal move
       for (let i = 1; i < this.engine.players.length; i++) {
-        if (this.engine.players[i].isExited) continue;
-        const legal = this.engine.getLegalMovesForPlayer(i);
+        const seat = (this.localSeat + i) % this.engine.players.length;
+        const player = this.engine.players[seat];
+        if (player.isExited || !player.isAi) continue;
+        const legal = this.engine.getLegalMovesForPlayer(seat);
         if (legal.length > 0) {
-          this.performAiTurn(i);
+          this.performAiTurn(seat);
           break;
         }
       }
@@ -740,22 +1014,13 @@ export class Game {
     if (move) {
       const ok = this.engine.executeMove(move);
       if (ok) {
-        if (move.type === 'beat') this.audio.playCardBeat();
-        else if (move.type === 'take') this.audio.playCardTake();
-        else this.audio.playCardPlay();
-
-        this.emitMoveVfx(move.card);
-        this.sync3DCardPositions();
-        this.hud.update(this.engine, this.getPlayerLegalMoveNames());
-        this.publishDiagnostics();
-        this.checkAndRecordGameOver();
-        this.triggerAiTurnIfNeeded();
+        this.afterHostMove(move);
       }
     }
   }
 
   private getPlayerLegalMoveNames(): string[] {
-    return this.engine.getLegalMovesForPlayer(0).map((m) => m.type);
+    return this.engine.getLegalMovesForPlayer(this.localSeat).map((m) => m.type);
   }
 
   private setupLifecycle(): void {

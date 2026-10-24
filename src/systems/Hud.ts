@@ -49,6 +49,7 @@ export class Hud {
   private onRestartCallback?: () => void;
   private onOpenSetupCallback?: () => void;
   private onOpenLeaderboardCallback?: () => void;
+  private onOpenOnlineCallback?: () => void;
   private onToggleAudioCallback?: () => boolean;
   private onPlaySelectedCardCallback?: () => void;
   private onGraphicsChangeCallback?: (preset: GraphicsPreset) => void;
@@ -97,6 +98,7 @@ export class Hud {
     onRestart: () => void;
     onOpenSetup?: () => void;
     onOpenLeaderboard?: () => void;
+    onOpenOnline?: () => void;
     onToggleAudio?: () => boolean;
     onPlaySelectedCard?: () => void;
     onGraphicsChange?: (preset: GraphicsPreset) => void;
@@ -108,6 +110,7 @@ export class Hud {
     this.onRestartCallback = callbacks.onRestart;
     this.onOpenSetupCallback = callbacks.onOpenSetup;
     this.onOpenLeaderboardCallback = callbacks.onOpenLeaderboard;
+    this.onOpenOnlineCallback = callbacks.onOpenOnline;
     this.onToggleAudioCallback = callbacks.onToggleAudio;
     this.onPlaySelectedCardCallback = callbacks.onPlaySelectedCard;
     this.onGraphicsChangeCallback = callbacks.onGraphicsChange;
@@ -127,6 +130,11 @@ export class Hud {
     }
 
     document.getElementById('btn-setup')?.addEventListener('click', () => this.onOpenSetupCallback?.());
+    document.getElementById('btn-online')?.addEventListener('click', () => this.onOpenOnlineCallback?.());
+    document.getElementById('drawer-btn-online')?.addEventListener('click', () => {
+      this.closeMobileDrawer();
+      this.onOpenOnlineCallback?.();
+    });
     document.getElementById('btn-leaderboard')?.addEventListener('click', () => this.onOpenLeaderboardCallback?.());
     document.getElementById('btn-restart')?.addEventListener('click', () => {
       this.gameoverDismissed = false;
