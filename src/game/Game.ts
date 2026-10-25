@@ -464,9 +464,6 @@ export class Game {
     else if (move.type === 'take') this.audio.playCardTake();
     else this.audio.playCardPlay();
 
-    if (move.card) {
-      this.emitMoveVfx(move.card);
-    }
     this.sync3DCardPositions();
     this.hud.update(this.engine, this.getPlayerLegalMoveNames());
     this.publishDiagnostics();
@@ -547,7 +544,7 @@ export class Game {
           mesh.rotation.copy(targetRot);
           mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, trumpPos, targetRot, duration, 0.3, undefined, 1);
+          this.animator.animateTo(mesh, trumpPos, targetRot, duration, 0, undefined, 1);
         }
       } else {
         const stackY = 0.055 + idx * 0.016;
@@ -558,7 +555,7 @@ export class Game {
           mesh.rotation.copy(targetRot);
           mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.2, undefined, 1);
+          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0, undefined, 1);
         }
       }
     });
@@ -578,7 +575,7 @@ export class Game {
         mesh.rotation.copy(targetRot);
         mesh.scale.setScalar(1);
       } else {
-        this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.6, undefined, 1);
+        this.animator.animateTo(mesh, targetPos, targetRot, duration, 0, undefined, 1);
       }
     });
 
@@ -639,7 +636,7 @@ export class Game {
           mesh.rotation.copy(targetRot);
           mesh.scale.setScalar(handScale);
         } else {
-          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.4, undefined, handScale);
+          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0, undefined, handScale);
         }
       } else {
         // Hidden off-screen in pager: stack neatly to left or right
@@ -655,7 +652,7 @@ export class Game {
           mesh.rotation.copy(tuckedRot);
           mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, tuckedPos, tuckedRot, duration, 0.4, undefined, 1);
+          this.animator.animateTo(mesh, tuckedPos, tuckedRot, duration, 0, undefined, 1);
         }
       }
     });
@@ -734,7 +731,7 @@ export class Game {
           mesh.rotation.copy(targetRot);
           mesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0.4, undefined, 1);
+          this.animator.animateTo(mesh, targetPos, targetRot, duration, 0, undefined, 1);
         }
       });
     }
@@ -758,7 +755,7 @@ export class Game {
           atkMesh.rotation.copy(targetRot);
           atkMesh.scale.setScalar(1);
         } else {
-          this.animator.animateTo(atkMesh, targetPos, targetRot, duration, 0.5, undefined, 1);
+          this.animator.animateTo(atkMesh, targetPos, targetRot, duration, 0, undefined, 1);
         }
       }
 
@@ -773,7 +770,7 @@ export class Game {
             defMesh.rotation.copy(targetRot);
             defMesh.scale.setScalar(1);
           } else {
-            this.animator.animateTo(defMesh, targetPos, targetRot, duration, 0.55, undefined, 1);
+            this.animator.animateTo(defMesh, targetPos, targetRot, duration, 0, undefined, 1);
           }
         }
       }
@@ -940,12 +937,6 @@ export class Game {
         this.hud.showRefereeAlert(this.engine.lastRefereeMessage);
       }
     });
-  }
-
-  private emitMoveVfx(card?: Card): void {
-    if (!card) return;
-    const isTrump = card.suit === this.engine.trumpSuit;
-    this.vfx.emitCardImpact(new THREE.Vector3(0, 0.1, 0.2), isTrump, this.reducedMotion);
   }
 
   private handlePlayerAction(action: 'take' | 'pass'): void {
